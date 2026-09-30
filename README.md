@@ -4,6 +4,8 @@ An Electron app shell (browser + hosted apps) that exposes a **Prompt-API-compat
 `window.ai`** to web pages, backed by a **local NVIDIA inference sidecar** (Ollama /
 `gpt-oss:20b`). No cloud, no egress — inference runs on the local GPU.
 
+
+**Demo Video:**
 [![Demo video](https://img.youtube.com/vi/z-jASVTIYXk/maxresdefault.jpg)](https://www.youtube.com/watch?v=z-jASVTIYXk)
 
 This is a runnable skeleton of the architecture we designed: a browser-owned AI
