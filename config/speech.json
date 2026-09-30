@@ -1,0 +1,40 @@
+{
+  "engine": {
+    "name": "whisper.cpp",
+    "version": "v1.9.4",
+    "build": "b5130",
+    "commit": "927cfce",
+    "platform": "win32",
+    "arch": "x64",
+    "binary": "resources/whisper/win-x64/whisper-cli.exe",
+    "files": [
+      "whisper-cli.exe",
+      "whisper.dll",
+      "ggml.dll",
+      "ggml-base.dll",
+      "ggml-cpu-x64.dll",
+      "ggml-cpu-sse42.dll",
+      "ggml-cpu-sandybridge.dll",
+      "ggml-cpu-haswell.dll",
+      "ggml-cpu-alderlake.dll",
+      "ggml-cpu-cannonlake.dll",
+      "ggml-cpu-skylakex.dll",
+      "ggml-cpu-cascadelake.dll",
+      "ggml-cpu-icelake.dll"
+    ],
+    "archiveSha256": "f9ec6c52a2e949b62ab51fa21d0d497958f9e41c3010c157c4e42932d5316f3c"
+  },
+  "model": {
+    "id": "whisper-base.en",
+    "filename": "ggml-base.en.bin",
+    "language": "en",
+    "sizeBytes": 147964211,
+    "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-base.en.bin?download=true",
+    "sha256": "a03779c86df3323075f5e796cb2ce5029f00ec8869eee3fdfb897afe36c6d002"
+  },
+  "limits": {
+    "maxDurationMs": 120000,
+    "transcriptionTimeoutMs": 180000,
+    "maxTranscriptCharacters": 20000
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "//": "Model tiering. The gateway routes workloads by 'tier'. v1 can ship with just the 'default' 20B.",
+  "default": {
+    "id": "gpt-oss:20b",
+    "ollamaOptions": { "num_gpu": 4 },
+    "minFreeVramGB": 14,
+    "recommendedVramGB": 24,
+    "notes": "MoE, 3.6B active/token, native MXFP4 ~14GB. Four layers are explicitly offloaded to the 4 GB RTX A500, leaving headroom for CUDA buffers; the remaining weights stay in system RAM."
+  },
+  "fast": {
+    "//": "Optional small model for the many-small-requests classification/extraction path.",
+    "id": "llama3.2:3b",
+    "minFreeVramGB": 4,
+    "recommendedVramGB": 8,
+    "notes": "Used for high-count per-row classification/extraction when routed by tier: 'fast'. The VRAM value is advisory because Ollama can offload to system RAM/CPU."
+  }
+}

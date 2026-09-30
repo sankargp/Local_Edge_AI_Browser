@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Local AI Browser — FSM demo</title>
+<style>
+  :root { font-family: Segoe UI, system-ui, sans-serif; }
+  body { margin: 0; background: #0f1216; color: #e7ecf2; }
+  header { padding: 14px 20px; background: #151a21; border-bottom: 1px solid #232b35; display:flex; align-items:center; gap:14px;}
+  header h1 { font-size: 15px; margin: 0; font-weight: 600; }
+  #status { font-size: 12px; color: #8aa0b6; }
+  main { display: grid; grid-template-columns: 1fr 380px; gap: 0; height: calc(100vh - 51px); }
+  .panel { padding: 18px 20px; overflow: auto; }
+  .panel.left { border-right: 1px solid #232b35; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: #8aa0b6; margin: 0 0 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #202833; vertical-align: top; }
+  th { color: #8aa0b6; font-weight: 500; }
+  .pill { display:inline-block; padding:2px 8px; border-radius: 999px; font-size: 11px; }
+  .p-high { background:#3a1720; color:#ff8fa3; } .p-med { background:#3a3117; color:#ffd98f; } .p-low { background:#17331f; color:#8fffb0; }
+  button { background:#2b6cff; color:white; border:0; padding:8px 14px; border-radius:8px; font-size:13px; cursor:pointer; }
+  button.secondary { background:#232b35; }
+  button:disabled { opacity:.5; cursor:default; }
+  .row-actions { display:flex; gap:8px; margin: 12px 0; flex-wrap: wrap; }
+  pre { white-space: pre-wrap; background:#0b0e12; border:1px solid #202833; border-radius:8px; padding:12px; font-size:12.5px; }
+  #chat { display:flex; flex-direction:column; height:100%; }
+  #log { flex:1; overflow:auto; display:flex; flex-direction:column; gap:10px; }
+  .msg { padding:10px 12px; border-radius:10px; font-size:13px; max-width:100%; }
+  .me { background:#1c2836; align-self:flex-end; } .ai { background:#161c24; align-self:flex-start; }
+  #composer { display:flex; gap:8px; margin-top:10px; }
+  #composer input { flex:1; background:#0b0e12; border:1px solid #202833; color:#e7ecf2; padding:9px 11px; border-radius:8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Local AI Browser</h1>
+  <span id="status">checking model…</span>
+</header>
+
+<main>
+  <!-- LEFT: the "web app" the developer built -->
+  <section class="panel left">
+    <h2>Work orders assigned to you</h2>
+    <div class="row-actions">
+      <button id="summarize">Summarize locally</button>
+      <button id="triage" class="secondary">Classify each (structured)</button>
+      <button id="pickfile" class="secondary">Ask about a file…</button>
+    </div>
+    <table id="wo">
+      <thead><tr><th>ID</th><th>Customer</th><th>Issue</th><th>Priority</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <h2 style="margin-top:22px">AI output</h2>
+    <pre id="out">—</pre>
+  </section>
+
+  <!-- RIGHT: chat side panel (shell capability, same window.ai API) -->
+  <section class="panel">
+    <h2>Chat with local model</h2>
+    <div id="chat">
+      <div id="log"></div>
+      <div id="composer">
+        <input id="q" placeholder="Ask about this page…" />
+        <button id="send">Send</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+// ---- The web developer's own data (would come from their backend) ----
+const WORK_ORDERS = [
+  { id: 'WO-4471', customer: 'Northwind Traders', issue: 'Printer offline after firmware update; spooler errors on 3 units.', priority: 'high' },
+  { id: 'WO-4472', customer: 'Contoso Ltd',       issue: 'Routine toner replacement and calibration.', priority: 'low' },
+  { id: 'WO-4473', customer: 'Fabrikam Inc',      issue: 'Intermittent paper jams, tray 2, escalating complaints.', priority: 'med' },
+  { id: 'WO-4474', customer: 'Adventure Works',   issue: 'Device unreachable on network, SLA breach in 4h.', priority: 'high' },
+];
+
+const tbody = document.querySelector('#wo tbody');
+WORK_ORDERS.forEach(w => {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td>${w.id}</td><td>${w.customer}</td><td>${w.issue}</td>
+    <td><span class="pill p-${w.priority}">${w.priority}</span></td>`;
+  tbody.appendChild(tr);
+});
+
+// Page-registered tool the model can call.
+window.app = {
+  getVisibleWorkOrders: () => WORK_ORDERS.map(w => ({ id: w.id, customer: w.customer, issue: w.issue })),
+};
+
+const out = document.getElementById('out');
+const statusEl = document.getElementById('status');
+
+function fail(e){ out.textContent = 'Error: ' + (e && e.message ? e.message : e); }
+
+if (!window.ai) {
+  statusEl.textContent = 'window.ai unavailable — this origin is not allowlisted.';
+} else {
+  init();
+}
+
+async function init() {
+  try {
+    const a = await window.ai.availability({ tier: 'default' });
+    statusEl.textContent = `model ${a.model} · ${a.state}` + (a.gpu?.name ? ` · ${a.gpu.name} (${a.gpu.freeVramGB}GB free)` : '');
+    if (a.state === 'downloadable') {
+      statusEl.textContent += ' — downloading…';
+      await window.ai.download({ tier: 'default' }, p => {
+        if (p.total) statusEl.textContent = `downloading ${(100*p.completed/p.total).toFixed(0)}%`;
+      });
+      statusEl.textContent = `model ${a.model} · ready`;
+    }
+  } catch (e) { statusEl.textContent = 'sidecar unavailable — start Ollama.'; }
+}
+
+// A shared session that exposes the page tool to the model.
+async function makeSession(systemPrompt) {
+  return window.ai.languageModel.create({
+    systemPrompt,
+    tools: [{
+      name: 'getVisibleWorkOrders',
+      description: 'Returns the work orders currently visible in the table.',
+      inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+      execute: async () => window.app.getVisibleWorkOrders(),
+    }],
+  });
+}
+
+// 1) Summarize locally — the model calls the page tool, then summarizes.
+document.getElementById('summarize').onclick = async () => {
+  out.textContent = 'thinking…';
+  try {
+    const s = await makeSession('You summarize field-service work orders for a technician. Be concise.');
+    out.textContent = await s.prompt('Call getVisibleWorkOrders, then give me a 3-bullet summary highlighting anything urgent.');
+    await s.destroy();
+  } catch (e) { fail(e); }
+};
+
+// 2) Structured extraction — constrained JSON output, one object per work order.
+document.getElementById('triage').onclick = async () => {
+  out.textContent = 'classifying…';
+  const schema = {
+    type: 'object',
+    properties: {
+      items: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            priority: { type: 'string', enum: ['high','medium','low'] },
+            slaRisk: { type: 'boolean' },
+            oneLiner: { type: 'string' }
+          },
+          required: ['id','priority','slaRisk','oneLiner'],
+          additionalProperties: false
+        }
+      }
+    },
+    required: ['items'],
+    additionalProperties: false
+  };
+  try {
+    const s = await makeSession('You classify work orders. Return only JSON matching the schema.');
+    const data = WORK_ORDERS.map(w => ({ id: w.id, issue: w.issue }));
+    const raw = await s.prompt('Classify each of these work orders:\n' + JSON.stringify(data),
+      { responseConstraint: schema });
+    out.textContent = JSON.stringify(JSON.parse(raw), null, 2);
+    await s.destroy();
+  } catch (e) { fail(e); }
+};
+
+// 3) File upload as context (native picker, permission-gated).
+document.getElementById('pickfile').onclick = async () => {
+  try {
+    const f = await window.ai.files.pick();
+    if (!f) return;
+    out.textContent = `loaded ${f.name}, thinking…`;
+    const s = await window.ai.languageModel.create({ systemPrompt: 'Answer using the provided document only.' });
+    out.textContent = await s.prompt(`Document "${f.name}":\n${f.text}\n\nGive me the 3 key points.`);
+    await s.destroy();
+  } catch (e) { fail(e); }
+};
+
+// 4) Streaming chat, grounded on the page content.
+const log = document.getElementById('log');
+const q = document.getElementById('q');
+let chatSession;
+function addMsg(text, cls){ const d=document.createElement('div'); d.className='msg '+cls; d.textContent=text; log.appendChild(d); log.scrollTop=log.scrollHeight; return d; }
+
+document.getElementById('send').onclick = sendChat;
+q.addEventListener('keydown', e => { if (e.key === 'Enter') sendChat(); });
+
+async function sendChat() {
+  const text = q.value.trim(); if (!text) return; q.value = '';
+  addMsg(text, 'me');
+  try {
+    if (!chatSession) {
+      const context = JSON.stringify(window.app.getVisibleWorkOrders());
+      chatSession = await window.ai.languageModel.create({
+        systemPrompt: 'You are a helpful assistant. The user is viewing these work orders: ' + context
+      });
+    }
+    const bubble = addMsg('', 'ai');
+    for await (const chunk of chatSession.promptStreaming(text)) {
+      bubble.textContent += chunk; log.scrollTop = log.scrollHeight;
+    }
+  } catch (e) { addMsg('Error: ' + (e.message||e), 'ai'); }
+}
+</script>
+</body>
+</html>

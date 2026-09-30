@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'">
+  <title>Local AI Browser</title>
+  <style>
+    :root { color-scheme: dark; font-family: "Segoe UI", system-ui, sans-serif; --sidebar: 390px; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #11161d; color: #e7edf5; overflow: hidden; user-select: none; }
+    button, textarea, input { font: inherit; }
+    #tabs { height: 38px; display: flex; align-items: end; gap: 2px; padding: 0 8px; background: #171d25; border-bottom: 1px solid #2c3541; }
+    .tab { width: 190px; height: 32px; padding: 0 8px 0 11px; display: flex; align-items: center; gap: 8px; background: #202833; border-radius: 8px 8px 0 0; color: #b7c3d1; cursor: pointer; }
+    .tab.active { background: #11161d; color: #fff; }
+    .tab-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; font-size: 12px; }
+    .tab button, #new-tab { color: inherit; background: transparent; border: 0; cursor: pointer; font-size: 16px; line-height: 1; }
+    #new-tab { height: 32px; width: 32px; color: #b7c3d1; }
+    #nav { height: 49px; display: flex; align-items: center; gap: 8px; padding: 0 12px; }
+    #nav > button { width: 30px; height: 30px; border: 0; border-radius: 7px; color: #dce6f2; background: transparent; cursor: pointer; font-size: 17px; }
+    #nav > button:hover:not(:disabled) { background: #293444; }
+    #nav > button:disabled { color: #536172; cursor: default; }
+    #address { height: 31px; flex: 1; min-width: 120px; border: 1px solid #354253; background: #0b0f14; color: #e7edf5; border-radius: 16px; padding: 0 14px; outline: none; user-select: text; }
+    #address:focus { border-color: #5188ff; }
+    #assistant-toggle { width: auto !important; padding: 0 11px; display: flex; gap: 7px; align-items: center; color: #cdddff !important; background: #1c2a3c !important; font-size: 12px !important; }
+    #assistant-toggle.active { background: #294f91 !important; color: #fff !important; }
+    #sidebar { position: fixed; z-index: 5; right: 0; top: 88px; bottom: 0; width: var(--sidebar); display: flex; flex-direction: column; border-left: 1px solid #303b4a; background: #0d1219; box-shadow: -10px 0 30px #05070b40; }
+    body.sidebar-closed #sidebar { display: none; }
+    .side-head { height: 55px; flex: 0 0 55px; display: flex; align-items: center; gap: 10px; padding: 0 13px; border-bottom: 1px solid #25303d; background: #121923; }
+    .ai-mark { width: 30px; height: 30px; flex: 0 0 30px; display: grid; place-items: center; border-radius: 9px; background: linear-gradient(135deg, #4384ff, #7656e9); box-shadow: 0 5px 16px #376fc940; }
+    .head-copy { min-width: 0; flex: 1; }
+    .head-copy strong { display: block; font-size: 13px; }
+    #agent-status { display: flex; gap: 6px; align-items: center; margin-top: 2px; color: #8999ad; font-size: 10px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    #agent-status::before { content: ""; width: 6px; height: 6px; flex: 0 0 6px; border-radius: 50%; background: #77869a; }
+    #agent-status.ready::before { background: #43d08a; box-shadow: 0 0 8px #43d08a; }
+    #agent-status.busy::before { background: #75a9ff; animation: pulse 1s infinite alternate; }
+    #agent-status.error::before { background: #ff7182; }
+    @keyframes pulse { to { opacity: .35; } }
+    .head-action { width: 28px; height: 28px; border: 0; border-radius: 7px; color: #9eafc3; background: transparent; cursor: pointer; }
+    .head-action:hover { background: #263342; color: #fff; }
+    #messages { flex: 1; min-height: 0; overflow-y: auto; padding: 15px 13px 18px; display: flex; flex-direction: column; gap: 12px; user-select: text; }
+    .welcome { margin: auto 5px; padding: 22px 15px; text-align: center; color: #91a1b4; }
+    .welcome .spark { font-size: 28px; color: #86adff; }
+    .welcome h2 { margin: 9px 0 7px; color: #edf3fb; font-size: 17px; }
+    .welcome p { margin: 0; font-size: 12px; line-height: 1.55; }
+    .suggestions { margin-top: 15px; display: grid; gap: 7px; }
+    .suggestion { padding: 9px 10px; border: 1px solid #2d3b4c; border-radius: 9px; color: #b9c9dc; background: #141d28; cursor: pointer; text-align: left; font-size: 11px; }
+    .suggestion:hover { border-color: #4d72a1; background: #182638; }
+    .message { max-width: 92%; display: flex; flex-direction: column; gap: 4px; align-self: flex-start; }
+    .message.user { align-self: flex-end; align-items: flex-end; }
+    .message-label { color: #708198; font-size: 9px; text-transform: uppercase; letter-spacing: .08em; }
+    .bubble { padding: 10px 11px; border: 1px solid #283546; border-radius: 12px 12px 12px 4px; color: #dce6f2; background: #151e29; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; font-size: 12px; }
+    .user .bubble { border-color: #416cab; border-radius: 12px 12px 4px 12px; color: #fff; background: #244d87; }
+    .message.error .bubble { border-color: #703744; color: #ffc3ca; background: #2c1820; }
+    .activity { align-self: stretch; padding: 8px 10px; border-left: 2px solid #416da9; color: #8fa4bd; background: #111923; font-size: 10px; line-height: 1.4; }
+    .activity strong { color: #b9cae0; font-weight: 600; }
+    #approval { margin: 0 13px 10px; padding: 12px; border: 1px solid #795f2d; border-radius: 12px; background: #241d11; box-shadow: 0 8px 25px #0005; }
+    #approval[hidden] { display: none; }
+    .approval-title { display: flex; align-items: center; gap: 7px; color: #ffd886; font-size: 12px; font-weight: 700; }
+    .approval-grid { margin: 9px 0; display: grid; grid-template-columns: 55px 1fr; gap: 5px 8px; font-size: 10px; }
+    .approval-grid dt { color: #8f8064; }
+    .approval-grid dd { min-width: 0; margin: 0; color: #d9ccb2; overflow-wrap: anywhere; max-height: 65px; overflow: auto; user-select: text; white-space: pre-wrap; }
+    .approval-buttons { display: flex; justify-content: flex-end; gap: 7px; }
+    .approval-buttons button { padding: 7px 11px; border: 0; border-radius: 7px; cursor: pointer; font-size: 11px; }
+    #reject { color: #d5c9b5; background: #3b3121; }
+    #approve { color: #171108; background: #f2bd59; font-weight: 700; }
+    #model-action, #speech-model-action { margin: 0 13px 10px; padding: 9px 11px; border: 1px solid #31568b; border-radius: 9px; color: #c6dcff; background: #172941; cursor: pointer; font-size: 11px; }
+    #model-action[hidden], #speech-model-action[hidden] { display: none; }
+    .composer { flex: 0 0 auto; margin: 0 12px 12px; padding: 9px; border: 1px solid #304156; border-radius: 13px; background: #121a25; box-shadow: 0 9px 30px #0006; }
+    .composer.recording { border-color: #b54a5c; box-shadow: 0 0 0 1px #b54a5c55, 0 9px 30px #0006; }
+    #agent-prompt { display: block; width: 100%; min-height: 48px; max-height: 130px; resize: none; border: 0; outline: 0; padding: 2px 3px 8px; color: #edf3fb; background: transparent; line-height: 1.4; font-size: 12px; user-select: text; }
+    #agent-prompt::placeholder { color: #69798d; }
+    .composer-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .composer-context { min-width: 0; flex: 1; display: flex; align-items: center; gap: 7px; overflow: hidden; }
+    #tab-context { min-width: 0; color: #6e8095; font-size: 9px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #speech-status { flex: 0 0 auto; color: #8fa4bd; font-size: 9px; white-space: nowrap; }
+    #speech-status.error { color: #ff8f9e; }
+    #speech-status.recording { color: #ff8292; }
+    .composer-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; }
+    #mic { width: 36px; height: 36px; display: grid; place-items: center; padding: 0; border: 1px solid #4b6380; border-radius: 50%; color: #e6effb; background: #1c2a3b; cursor: pointer; }
+    #mic svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+    #mic:hover:not(:disabled) { color: #fff; border-color: #75a9ee; background: #29486d; box-shadow: 0 0 0 3px #4e8cda24; }
+    #mic:disabled { opacity: .42; cursor: default; }
+    #mic[aria-pressed="true"] { color: #fff; border-color: #d45669; background: #a6374a; animation: record-pulse 1.2s infinite alternate; }
+    #mic[data-state="transcribing"] { color: #d9e7ff; border-color: #5279ae; background: #26466f; animation: pulse 1s infinite alternate; }
+    @keyframes record-pulse { to { box-shadow: 0 0 0 5px #cf4b5e25; } }
+    #send, #stop { min-width: 58px; padding: 7px 10px; border: 0; border-radius: 8px; color: #fff; background: #397aeb; cursor: pointer; font-size: 11px; font-weight: 700; }
+    #send:disabled { opacity: .45; cursor: default; }
+    #stop { background: #8c3e50; }
+    #stop[hidden], #send[hidden] { display: none; }
+  </style>
+</head>
+<body>
+  <div id="tabs"><button id="new-tab" title="New tab">+</button></div>
+  <div id="nav"><button id="back" title="Back">‹</button><button id="forward" title="Forward">›</button><button id="reload" title="Reload">↻</button><input id="address" autocomplete="off" spellcheck="false" placeholder="Enter a web address"><button id="assistant-toggle" class="active" title="Toggle AI sidebar"><span>✦</span><span>AI Assistant</span></button></div>
+  <aside id="sidebar" aria-label="AI browser assistant">
+    <header class="side-head"><div class="ai-mark">✦</div><div class="head-copy"><strong>Browser Assistant</strong><div id="agent-status">Checking local model…</div></div><button class="head-action" id="clear" title="Clear conversation">↺</button><button class="head-action" id="close-sidebar" title="Close sidebar">×</button></header>
+    <section id="messages" aria-live="polite"><div class="welcome" id="welcome"><div class="spark">✦</div><h2>What should I do?</h2><p>I can read and work across your tabs, fill forms, retrieve information, and prepare page actions.</p><div class="suggestions"><button class="suggestion">Summarize this page</button><button class="suggestion">Find the important links and images on this page</button><button class="suggestion">Help me complete the form on this page</button></div></div></section>
+    <button id="model-action" hidden>Download the local model</button>
+    <button id="speech-model-action" hidden>Download English speech model (142 MiB)</button>
+    <section id="approval" hidden aria-live="assertive"><div class="approval-title">⚠ Approval required</div><dl class="approval-grid"><dt>Action</dt><dd id="approval-action"></dd><dt>Tab</dt><dd id="approval-tab"></dd><dt>Target</dt><dd id="approval-target"></dd><dt>Effect</dt><dd id="approval-effect"></dd><dt>Values</dt><dd id="approval-values"></dd></dl><div class="approval-buttons"><button id="reject">Reject</button><button id="approve">Approve once</button></div></section>
+    <form class="composer" id="composer"><textarea id="agent-prompt" rows="2" placeholder="Ask about or act on any tab…" aria-label="Ask the browser assistant"></textarea><div class="composer-foot"><div class="composer-context"><span id="tab-context">No active tab</span><span id="speech-status" aria-live="polite"></span></div><div class="composer-actions"><button id="mic" type="button" aria-label="Start voice recording" aria-pressed="false" title="Record voice" data-state="idle"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 10a7 7 0 0 0 14 0"></path><path d="M12 17v5"></path><path d="M8 22h8"></path></svg></button><button id="send" type="submit">Send</button><button id="stop" type="button" hidden>Stop</button></div></div></form>
+  </aside>
+  <script src="voice-audio.js"></script>
+  <script src="browser.js"></script>
+</body>
+</html>

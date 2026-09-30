@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dijkstra's Algorithm — Local AI Demo</title>
+  <style>
+    :root { color-scheme: light; font-family: Georgia, serif; color: #18212c; background: #f7f8fa; }
+    body { margin: 0; } main { max-width: 860px; margin: 0 auto; padding: 54px 28px 80px; }
+    header { border-bottom: 1px solid #d9dee5; padding-bottom: 28px; margin-bottom: 32px; }
+    .eyebrow { color: #50657b; font: 600 12px/1.2 system-ui, sans-serif; letter-spacing: .1em; text-transform: uppercase; }
+    h1 { font: 700 44px/1.12 Georgia, serif; letter-spacing: -.03em; margin: 11px 0; } h2 { margin-top: 38px; font-size: 27px; }
+    p, li { font-size: 18px; line-height: 1.68; } .lede { color: #415265; font-size: 21px; max-width: 720px; }
+    pre { background: #17212b; color: #e5edf5; border-radius: 10px; padding: 22px; overflow: auto; font: 14px/1.55 ui-monospace, Consolas, monospace; }
+    .example, #summary { background: #ecf4ff; border: 1px solid #c8dcf5; border-radius: 10px; padding: 20px 22px; }
+    button { appearance: none; border: 0; border-radius: 8px; background: #1769d1; color: white; font: 600 14px system-ui, sans-serif; padding: 11px 16px; cursor: pointer; }
+    button:disabled { cursor: wait; opacity: .65; } #status { margin-left: 10px; color: #526b85; font: 14px system-ui, sans-serif; } #summary { white-space: pre-wrap; margin-top: 15px; min-height: 24px; font: 16px/1.55 system-ui, sans-serif; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div class="eyebrow">Algorithms · Local AI-enabled page</div>
+      <h1>Dijkstra's algorithm: finding the cheapest route through a graph</h1>
+      <p class="lede">Dijkstra's algorithm solves the single-source shortest-path problem for graphs whose edge weights are never negative. It is one of the clearest examples of a greedy algorithm that is both practical and provably correct.</p>
+      <button id="summarize">Summarize locally</button><span id="status"></span>
+      <div id="summary">Click “Summarize locally” to generate an on-device summary of this article.</div>
+    </header>
+
+    <article id="article">
+      <h2>The problem it solves</h2>
+      <p>A graph represents a collection of things and the connections between them. A road network is the familiar example: intersections are vertices, roads are edges, and the length or travel time of each road is its weight. Given one starting vertex, the goal is to calculate the smallest total weight needed to reach every other vertex. The same abstraction appears in packet routing, dependency analysis, game navigation, logistics, and many recommendation systems.</p>
+      <p>“Shortest” does not have to mean physically short. An edge might represent money, risk, latency, energy use, or the number of transfers. What matters is that all edge weights are zero or positive. That restriction is not a minor implementation detail; it is the reason the algorithm can safely commit to a route once it has chosen it.</p>
+
+      <h2>The core insight</h2>
+      <p>The algorithm maintains a best-known tentative distance for each vertex. At the beginning, the source has distance zero and every other vertex has infinity. It repeatedly chooses the unvisited vertex with the smallest tentative distance, declares that distance final, and then tries to improve the estimates of its neighbors. Trying to improve a neighbor is called <em>relaxing</em> an edge: if reaching a neighbor through the newly finalized vertex is cheaper than the old estimate, replace the old estimate.</p>
+      <p>The greedy choice is safe because a path that reaches the selected vertex later must travel through vertices whose tentative distances are at least as large. With non-negative edges, adding more edges can never make that later route cheaper. Thus no unvisited route can invalidate the distance just finalized.</p>
+
+      <h2>A small worked example</h2>
+      <div class="example">
+        <p>Suppose A connects to B with cost 4 and C with cost 1. C connects to B with cost 2 and D with cost 5. B connects to D with cost 1. Starting at A, the tentative distances are A = 0, B = 4, C = 1, and D = ∞.</p>
+        <p>C is chosen first because 1 is the smallest unresolved distance. Relaxing C→B changes B from 4 to 3, and relaxing C→D changes D from ∞ to 6. B is now chosen at distance 3; its edge to D improves D from 6 to 4. The final shortest paths are A→C at 1, A→C→B at 3, and A→C→B→D at 4.</p>
+      </div>
+
+      <h2>Data structures and pseudocode</h2>
+      <p>A simple implementation scans every unvisited vertex to find the smallest tentative distance. That is easy to teach but costs O(V²), where V is the number of vertices. For sparse graphs, a min-priority queue is far more efficient. The queue stores candidate pairs of distance and vertex, allowing the next most promising vertex to be removed in logarithmic time. Since a vertex's estimate may improve several times, many implementations insert a new queue entry and discard stale entries when they are later popped.</p>
+      <pre>dist[source] = 0
+dist[all other vertices] = infinity
+push (0, source) into minPriorityQueue
+
+while queue is not empty:
+    (currentDistance, u) = pop smallest entry
+    if currentDistance != dist[u]:
+        continue  // stale queue entry
+
+    for each edge (u, v, weight):
+        candidate = dist[u] + weight
+        if candidate &lt; dist[v]:
+            dist[v] = candidate
+            previous[v] = u
+            push (candidate, v) into queue</pre>
+      <p>With an adjacency list and binary heap, the usual running time is O((V + E) log V), where E is the number of edges. The `previous` array is optional for distance calculation but essential when an application needs the route itself. Starting at the destination and following `previous` pointers backward reconstructs the path.</p>
+
+      <h2>Why negative edges break the proof</h2>
+      <p>Imagine that the algorithm finalizes a vertex at distance 5, then later discovers a route that first travels to a vertex at distance 10 and takes a negative edge of weight −8 back to the finalized vertex. The newly discovered route costs 2, contradicting the finalization. Because that possibility exists, Dijkstra's algorithm must not be used with negative edge weights. Bellman–Ford is a standard alternative when negative edges are allowed and can additionally detect reachable negative cycles.</p>
+
+      <h2>Engineering considerations</h2>
+      <p>Real systems must decide what a vertex and weight mean before choosing an algorithm. GPS routing often uses travel time, but time depends on traffic and turn restrictions, so the graph may need to encode direction, time, and state. Large applications may terminate as soon as one target is finalized rather than computing routes to every vertex. Bidirectional search can help for a known source and destination, while A* adds a heuristic estimate to direct the search toward a goal.</p>
+      <p>Correctness also depends on numerical choices. Distances can overflow fixed-width integer types, floating-point values can accumulate rounding error, and a disconnected vertex should remain at infinity. A priority queue improves speed but does not change the algorithm's meaning: the invariant remains that every finalized distance is the cost of a cheapest path from the source.</p>
+
+      <h2>Takeaway</h2>
+      <p>Dijkstra's algorithm is powerful because its idea is compact: always expand the cheapest unresolved route, then update what that route makes possible. The non-negative-weight condition turns that local decision into a globally correct one. Once the graph, weight semantics, and data structures are chosen carefully, it scales from a classroom map to substantial routing systems.</p>
+    </article>
+  </main>
+  <script>
+    const button = document.getElementById('summarize');
+    const summary = document.getElementById('summary');
+    const status = document.getElementById('status');
+    button.addEventListener('click', async () => {
+      if (!window.ai) { summary.textContent = 'Local AI is unavailable in this page.'; return; }
+      button.disabled = true; status.textContent = 'Checking local model…'; summary.textContent = '';
+      try {
+        const availability = await window.ai.availability({ tier: 'default' });
+        if (availability.state !== 'available') throw new Error(`${availability.model} is ${availability.state}${availability.reason ? `: ${availability.reason}` : ''}`);
+        status.textContent = 'Generating summary locally…';
+        const session = await window.ai.languageModel.create({
+          systemPrompt: 'You are a precise computer-science editor. Summarize the supplied article in 5 concise bullets, covering the goal, greedy invariant, complexity, negative weights, and a practical use case.'
+        });
+        const article = document.getElementById('article').innerText;
+        summary.textContent = await session.prompt(`Article to summarize:\n\n${article}`);
+        await session.destroy(); status.textContent = 'Generated locally.';
+      } catch (error) {
+        summary.textContent = `Unable to summarize: ${error.message || error}`; status.textContent = '';
+      } finally { button.disabled = false; }
+    });
+  </script>
+</body>
+</html>

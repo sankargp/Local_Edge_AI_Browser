@@ -1,0 +1,21 @@
+{
+  "name": "local-ai-browser",
+  "version": "0.1.0",
+  "description": "App shell (browser + hosted apps) exposing a Prompt-API-compatible window.ai backed by a local NVIDIA CUDA inference sidecar (Ollama / gpt-oss-20b).",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "start:verbose": "electron . --enable-logging",
+    "test": "node --test test/*.test.js",
+    "test:electron": "electron test/electron-smoke.js",
+    "test:voice": "electron test/voice-electron-smoke.js"
+  },
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^31.0.0"
+  },
+  "allowScripts": {
+    "electron@31.7.7": true
+  }
+}

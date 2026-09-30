@@ -1,0 +1,10 @@
+{
+  "//": "Origins allowed to see window.ai. Default-deny: anything not here gets no API at all.",
+  "//_matching": "Exact origin match (scheme://host[:port]). 'file://' covers the bundled demo app.",
+  "allowedOrigins": [
+    "file://",
+    "https://hpfsm.hp.com",
+    "https://apps.hp.com",
+    "http://localhost:5173"
+  ]
+}
